@@ -1,0 +1,1145 @@
+print("[f3liks hub] Starting...")
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Stats = game:GetService("Stats")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+	LocalPlayer = Players.LocalPlayer
+end
+
+local HUB_NAME = "f3liks hub"
+local GUI_OBJECT_NAME = "f3liks_hub_gui"
+local BLUR_OBJECT_NAME = "f3liks_hub_blur"
+
+local function getUiParent()
+	local okGui, gui = pcall(function()
+		return gethui and gethui()
+	end)
+	if okGui and gui and typeof(gui) == "Instance" then
+		return gui
+	end
+
+	local okCore, core = pcall(function()
+		return CoreGui
+	end)
+	if okCore and core and typeof(core) == "Instance" then
+		return core
+	end
+
+	return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local function safeClipboard(txt)
+	local ok = pcall(function()
+		if setclipboard then
+			setclipboard(tostring(txt))
+		elseif toclipboard then
+			toclipboard(tostring(txt))
+		end
+	end)
+	return ok
+end
+
+local function getHumanoid()
+	local char = LocalPlayer.Character
+	if not char then return nil end
+	return char:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRoot()
+	local char = LocalPlayer.Character
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart")
+end
+
+local uiParent = getUiParent()
+local existing = uiParent:FindFirstChild(GUI_OBJECT_NAME)
+if existing then
+	pcall(function() existing:Destroy() end)
+end
+
+local oldBlur = Lighting:FindFirstChild(BLUR_OBJECT_NAME)
+if oldBlur then
+	pcall(function() oldBlur:Destroy() end)
+end
+
+local THEME = {
+	BgMain = Color3.fromRGB(17, 18, 23),
+	BgTop = Color3.fromRGB(24, 26, 33),
+	BgSide = Color3.fromRGB(20, 22, 28),
+	BgCard = Color3.fromRGB(28, 30, 38),
+	BgCardAlt = Color3.fromRGB(34, 37, 47),
+	BgInput = Color3.fromRGB(14, 15, 20),
+	Stroke = Color3.fromRGB(48, 52, 66),
+	Accent = Color3.fromRGB(99, 118, 247),
+	AccentSoft = Color3.fromRGB(42, 49, 96),
+	TextMain = Color3.fromRGB(242, 244, 248),
+	TextSub = Color3.fromRGB(156, 162, 178),
+	Success = Color3.fromRGB(66, 184, 131),
+	Danger = Color3.fromRGB(235, 77, 92),
+	Warn = Color3.fromRGB(245, 166, 35),
+}
+
+local function addCorner(inst, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 8)
+	c.Parent = inst
+	return c
+end
+
+local function addStroke(inst, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or THEME.Stroke
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = inst
+	return s
+end
+
+local function addPadding(inst, pad)
+	local p = Instance.new("UIPadding")
+	local v = pad or 8
+	p.PaddingTop = UDim.new(0, v)
+	p.PaddingBottom = UDim.new(0, v)
+	p.PaddingLeft = UDim.new(0, v)
+	p.PaddingRight = UDim.new(0, v)
+	p.Parent = inst
+	return p
+end
+
+local function makeCard(parent, height, order)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0, height or 56)
+	f.LayoutOrder = order or 1
+	f.BackgroundColor3 = THEME.BgCard
+	f.BorderSizePixel = 0
+	f.Parent = parent
+	addCorner(f, 8)
+	addStroke(f, THEME.Stroke, 1)
+	return f
+end
+
+local function makeLabel(parent, text, size, bold, color, order)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(1, 0, 0, size and (size + 8) or 22)
+	l.LayoutOrder = order or 1
+	l.BackgroundTransparency = 1
+	l.Text = text
+	l.TextSize = size or 13
+	l.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
+	l.TextColor3 = color or THEME.TextMain
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextWrapped = true
+	l.Parent = parent
+	return l
+end
+
+local function makeButton(parent, labelText, accentColor, onClick)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 118, 0, 30)
+	b.BackgroundColor3 = accentColor or THEME.BgCardAlt
+	b.BorderSizePixel = 0
+	b.Text = labelText
+	b.TextSize = 12
+	b.Font = Enum.Font.GothamBold
+	b.TextColor3 = THEME.TextMain
+	b.AutoButtonColor = true
+	b.Parent = parent
+	addCorner(b, 6)
+	addStroke(b, THEME.Stroke, 1)
+	b.MouseButton1Click:Connect(function()
+		pcall(onClick)
+	end)
+	return b
+end
+
+local function makeInput(parent, placeholder, defaultText, width)
+	local tb = Instance.new("TextBox")
+	tb.Size = UDim2.new(0, width or 74, 0, 30)
+	tb.BackgroundColor3 = THEME.BgInput
+	tb.BorderSizePixel = 0
+	tb.PlaceholderText = placeholder or ""
+	tb.Text = tostring(defaultText or "")
+	tb.TextSize = 12
+	tb.Font = Enum.Font.Code
+	tb.TextColor3 = THEME.TextMain
+	tb.PlaceholderColor3 = THEME.TextSub
+	tb.ClearTextOnFocus = false
+	tb.Parent = parent
+	addCorner(tb, 6)
+	addStroke(tb, THEME.Stroke, 1)
+	return tb
+end
+
+-- Root ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = GUI_OBJECT_NAME
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = uiParent
+
+-- Floating reopen chip when minimized
+local reopenBtn = Instance.new("TextButton")
+reopenBtn.Name = "ReopenChip"
+reopenBtn.Size = UDim2.new(0, 122, 0, 34)
+reopenBtn.Position = UDim2.new(0, 14, 0.5, -17)
+reopenBtn.BackgroundColor3 = THEME.BgTop
+reopenBtn.BorderSizePixel = 0
+reopenBtn.Text = HUB_NAME
+reopenBtn.TextSize = 13
+reopenBtn.Font = Enum.Font.GothamBold
+reopenBtn.TextColor3 = THEME.TextMain
+reopenBtn.Visible = false
+reopenBtn.Parent = screenGui
+addCorner(reopenBtn, 8)
+addStroke(reopenBtn, THEME.Accent, 1.5)
+
+-- Main Window
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainWindow"
+mainFrame.Size = UDim2.new(0, 540, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -270, 0.5, -175)
+mainFrame.BackgroundColor3 = THEME.BgMain
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+addCorner(mainFrame, 10)
+addStroke(mainFrame, THEME.Stroke, 1.5)
+
+-- Top Bar
+local topBar = Instance.new("Frame")
+topBar.Name = "TopBar"
+topBar.Size = UDim2.new(1, 0, 0, 38)
+topBar.BackgroundColor3 = THEME.BgTop
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+addCorner(topBar, 10)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -110, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = HUB_NAME .. "  |  v2.0"
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextColor3 = THEME.TextMain
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = topBar
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 28, 0, 24)
+minBtn.Position = UDim2.new(1, -66, 0.5, -12)
+minBtn.BackgroundColor3 = THEME.BgCardAlt
+minBtn.Text = "-"
+minBtn.TextSize = 16
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextColor3 = THEME.TextMain
+minBtn.Parent = topBar
+addCorner(minBtn, 6)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 24)
+closeBtn.Position = UDim2.new(1, -34, 0.5, -12)
+closeBtn.BackgroundColor3 = THEME.Danger
+closeBtn.Text = "X"
+closeBtn.TextSize = 12
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextColor3 = THEME.TextMain
+closeBtn.Parent = topBar
+addCorner(closeBtn, 6)
+
+-- Dragging support for TopBar
+do
+	local dragging = false
+	local dragStart, startPos
+	topBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			mainFrame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+end
+
+minBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+	reopenBtn.Visible = true
+end)
+
+reopenBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = true
+	reopenBtn.Visible = false
+end)
+
+-- Sidebar & Content Area
+local sidebar = Instance.new("ScrollingFrame")
+sidebar.Name = "Sidebar"
+sidebar.Size = UDim2.new(0, 134, 1, -46)
+sidebar.Position = UDim2.new(0, 6, 0, 42)
+sidebar.BackgroundColor3 = THEME.BgSide
+sidebar.BorderSizePixel = 0
+sidebar.ScrollBarThickness = 3
+sidebar.CanvasSize = UDim2.new(0, 0, 0, 320)
+sidebar.Parent = mainFrame
+addCorner(sidebar, 8)
+addStroke(sidebar, THEME.Stroke, 1)
+addPadding(sidebar, 6)
+
+local sideList = Instance.new("UIListLayout")
+sideList.Padding = UDim.new(0, 6)
+sideList.SortOrder = Enum.SortOrder.LayoutOrder
+sideList.Parent = sidebar
+
+local contentArea = Instance.new("Frame")
+contentArea.Name = "ContentArea"
+contentArea.Size = UDim2.new(1, -150, 1, -46)
+contentArea.Position = UDim2.new(0, 145, 0, 42)
+contentArea.BackgroundTransparency = 1
+contentArea.Parent = mainFrame
+
+local pages = {}
+local tabButtons = {}
+
+local function createPage(name, order)
+	local page = Instance.new("ScrollingFrame")
+	page.Name = name .. "Page"
+	page.Size = UDim2.new(1, 0, 1, 0)
+	page.BackgroundTransparency = 1
+	page.BorderSizePixel = 0
+	page.ScrollBarThickness = 4
+	page.Visible = false
+	page.Parent = contentArea
+	addPadding(page, 4)
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = page
+
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		page.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 14)
+	end)
+
+	pages[name] = page
+
+	local tabBtn = Instance.new("TextButton")
+	tabBtn.Size = UDim2.new(1, 0, 0, 34)
+	tabBtn.LayoutOrder = order
+	tabBtn.BackgroundColor3 = THEME.BgCard
+	tabBtn.BorderSizePixel = 0
+	tabBtn.Text = name
+	tabBtn.TextSize = 12
+	tabBtn.Font = Enum.Font.GothamBold
+	tabBtn.TextColor3 = THEME.TextSub
+	tabBtn.Parent = sidebar
+	addCorner(tabBtn, 7)
+	addStroke(tabBtn, THEME.Stroke, 1)
+	tabButtons[name] = tabBtn
+
+	tabBtn.MouseButton1Click:Connect(function()
+		for pName, pFrame in pairs(pages) do
+			pFrame.Visible = (pName == name)
+		end
+		for bName, bInst in pairs(tabButtons) do
+			local active = (bName == name)
+			bInst.BackgroundColor3 = active and THEME.AccentSoft or THEME.BgCard
+			bInst.TextColor3 = active and THEME.TextMain or THEME.TextSub
+		end
+	end)
+
+	return page
+end
+
+-- Shared Output Box reference (populated in Tools tab, updated by AI Builder)
+local sharedOutputBox = nil
+local sharedStatusLabel = nil
+
+local function setOutputCode(codeStr, statusMsg)
+	if sharedOutputBox then
+		sharedOutputBox.Text = tostring(codeStr or "")
+	end
+	if sharedStatusLabel and statusMsg then
+		sharedStatusLabel.Text = tostring(statusMsg)
+	end
+end
+
+-- =========================================================
+-- TAB 1: AI SCRIPT PROMPT CREATOR (SLOW THINKING + STREAM)
+-- =========================================================
+local aiPage = createPage("AI Builder", 1)
+
+makeLabel(aiPage, "AI Script Prompt Creator (Slow Thinking Mode)", 15, true, THEME.TextMain, 1)
+makeLabel(aiPage, "Describe what you want or pick a preset. It takes its time, shows reasoning steps, and writes a script.", 12, false, THEME.TextSub, 2)
+
+local promptCard = makeCard(aiPage, 88, 3)
+addPadding(promptCard, 8)
+local promptBox = Instance.new("TextBox")
+promptBox.Size = UDim2.new(1, 0, 1, 0)
+promptBox.BackgroundColor3 = THEME.BgInput
+promptBox.BorderSizePixel = 0
+promptBox.MultiLine = true
+promptBox.ClearTextOnFocus = false
+promptBox.TextWrapped = true
+promptBox.TextXAlignment = Enum.TextXAlignment.Left
+promptBox.TextYAlignment = Enum.TextYAlignment.Top
+promptBox.Font = Enum.Font.Code
+promptBox.TextSize = 12
+promptBox.TextColor3 = THEME.TextMain
+promptBox.PlaceholderColor3 = THEME.TextSub
+promptBox.PlaceholderText = "Example: Make a low-gravity floating jump script with a keybind toggle and safe cleanup..."
+promptBox.Text = "Create a smooth speed + anti-AFK + jump boost utility with a toggle key"
+promptBox.Parent = promptCard
+addCorner(promptBox, 6)
+addStroke(promptBox, THEME.Stroke, 1)
+
+local controlsCard = makeCard(aiPage, 46, 4)
+addPadding(controlsCard, 8)
+local stepDelayInput = makeInput(controlsCard, "Sec", "1.1", 56)
+stepDelayInput.Position = UDim2.new(0, 0, 0.5, -15)
+
+local delayHint = Instance.new("TextLabel")
+delayHint.Size = UDim2.new(0, 95, 1, 0)
+delayHint.Position = UDim2.new(0, 62, 0, 0)
+delayHint.BackgroundTransparency = 1
+delayHint.Text = "sec/thought"
+delayHint.TextSize = 11
+delayHint.Font = Enum.Font.Gotham
+delayHint.TextColor3 = THEME.TextSub
+delayHint.TextXAlignment = Enum.TextXAlignment.Left
+delayHint.Parent = controlsCard
+
+local generateBtn = makeButton(controlsCard, "Think & Build", THEME.Accent, function() end)
+generateBtn.Position = UDim2.new(1, -244, 0.5, -15)
+
+local copyGeneratedBtn = makeButton(controlsCard, "Copy Script", THEME.BgCardAlt, function() end)
+copyGeneratedBtn.Position = UDim2.new(1, -118, 0.5, -15)
+
+-- Preset chips card
+local presetCard = makeCard(aiPage, 44, 5)
+addPadding(presetCard, 7)
+local preset1 = makeButton(presetCard, "Preset: Speed+Jump", THEME.BgCardAlt, function()
+	promptBox.Text = "Smooth WalkSpeed and JumpPower controller with reset safety"
+end)
+preset1.Size = UDim2.new(0, 120, 0, 28)
+preset1.Position = UDim2.new(0, 0, 0.5, -14)
+
+local preset2 = makeButton(presetCard, "Preset: Fly/Float", THEME.BgCardAlt, function()
+	promptBox.Text = "Safe BodyVelocity / LinearVelocity hover script with toggle"
+end)
+preset2.Size = UDim2.new(0, 112, 0, 28)
+preset2.Position = UDim2.new(0, 126, 0.5, -14)
+
+local preset3 = makeButton(presetCard, "Preset: Part ESP", THEME.BgCardAlt, function()
+	promptBox.Text = "Highlight nearby BaseParts or players with clean toggle off"
+end)
+preset3.Size = UDim2.new(0, 112, 0, 28)
+preset3.Position = UDim2.new(0, 244, 0.5, -14)
+
+-- Thinking Process Log Box
+local thoughtCard = makeCard(aiPage, 150, 6)
+addPadding(thoughtCard, 8)
+local thoughtHeader = Instance.new("TextLabel")
+thoughtHeader.Size = UDim2.new(1, 0, 0, 18)
+thoughtHeader.BackgroundTransparency = 1
+thoughtHeader.Text = "AI Thinking Process (Idle)"
+thoughtHeader.TextSize = 12
+thoughtHeader.Font = Enum.Font.GothamBold
+thoughtHeader.TextColor3 = THEME.Warn
+thoughtHeader.TextXAlignment = Enum.TextXAlignment.Left
+thoughtHeader.Parent = thoughtCard
+
+local thoughtBox = Instance.new("TextBox")
+thoughtBox.Size = UDim2.new(1, 0, 1, -22)
+thoughtBox.Position = UDim2.new(0, 0, 0, 22)
+thoughtBox.BackgroundColor3 = THEME.BgInput
+thoughtBox.BorderSizePixel = 0
+thoughtBox.MultiLine = true
+thoughtBox.TextEditable = false
+thoughtBox.ClearTextOnFocus = false
+thoughtBox.TextWrapped = true
+thoughtBox.TextXAlignment = Enum.TextXAlignment.Left
+thoughtBox.TextYAlignment = Enum.TextYAlignment.Top
+thoughtBox.Font = Enum.Font.Code
+thoughtBox.TextSize = 11
+thoughtBox.TextColor3 = THEME.TextSub
+thoughtBox.Text = "Ready. Enter a prompt and press 'Think & Build' to watch step-by-step reasoning."
+thoughtBox.Parent = thoughtCard
+addCorner(thoughtBox, 6)
+addStroke(thoughtBox, THEME.Stroke, 1)
+
+-- Generated Script Preview Box
+local genScriptCard = makeCard(aiPage, 155, 7)
+addPadding(genScriptCard, 8)
+local genHeader = Instance.new("TextLabel")
+genHeader.Size = UDim2.new(1, 0, 0, 18)
+genHeader.BackgroundTransparency = 1
+genHeader.Text = "Generated Luau Script"
+genHeader.TextSize = 12
+genHeader.Font = Enum.Font.GothamBold
+genHeader.TextColor3 = THEME.Success
+genHeader.TextXAlignment = Enum.TextXAlignment.Left
+genHeader.Parent = genScriptCard
+
+local genScriptBox = Instance.new("TextBox")
+genScriptBox.Size = UDim2.new(1, 0, 1, -22)
+genScriptBox.Position = UDim2.new(0, 0, 0, 22)
+genScriptBox.BackgroundColor3 = THEME.BgInput
+genScriptBox.BorderSizePixel = 0
+genScriptBox.MultiLine = true
+genScriptBox.ClearTextOnFocus = false
+genScriptBox.TextWrapped = false
+genScriptBox.TextXAlignment = Enum.TextXAlignment.Left
+genScriptBox.TextYAlignment = Enum.TextYAlignment.Top
+genScriptBox.Font = Enum.Font.Code
+genScriptBox.TextSize = 11
+genScriptBox.TextColor3 = THEME.TextMain
+genScriptBox.Text = "-- Generated code will appear here after thinking steps finish."
+genScriptBox.Parent = genScriptCard
+addCorner(genScriptBox, 6)
+addStroke(genScriptBox, THEME.Stroke, 1)
+
+local isThinking = false
+local thinkRunId = 0
+
+local function buildScriptFromPrompt(rawPrompt)
+	local q = string.lower(tostring(rawPrompt or ""))
+	if string.find(q, "fly") or string.find(q, "float") or string.find(q, "hover") then
+		return table.concat({
+			"-- Built by f3liks hub AI Builder",
+			"local Players = game:GetService('Players')",
+			"local RunService = game:GetService('RunService')",
+			"local lp = Players.LocalPlayer",
+			"local hovering = true",
+			"local conn",
+			"conn = RunService.Heartbeat:Connect(function()",
+			"\tif not hovering then return end",
+			"\tlocal char = lp.Character",
+			"\tlocal hrp = char and char:FindFirstChild('HumanoidRootPart')",
+			"\tlocal hum = char and char:FindFirstChildOfClass('Humanoid')",
+			"\tif hrp and hum then",
+			"\t\thrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 2.5, hrp.AssemblyLinearVelocity.Z)",
+			"\tend",
+			"end)",
+			"print('[f3liks hub] Hover active. Set hovering = false to stop.')"
+		}, "\n")
+	elseif string.find(q, "esp") or string.find(q, "highlight") or string.find(q, "part") then
+		return table.concat({
+			"-- Built by f3liks hub AI Builder",
+			"local Players = game:GetService('Players')",
+			"local lp = Players.LocalPlayer",
+			"local folder = Instance.new('Folder')",
+			"folder.Name = 'f3liks_esp_highlights'",
+			"folder.Parent = game:GetService('CoreGui')",
+			"for _, plr in ipairs(Players:GetPlayers()) do",
+			"\tif plr ~= lp and plr.Character then",
+			"\t\tlocal hl = Instance.new('Highlight')",
+			"\t\thl.FillTransparency = 0.65",
+			"\t\thl.OutlineTransparency = 0",
+			"\t\thl.Adornee = plr.Character",
+			"\t\thl.Parent = folder",
+			"\tend",
+			"end",
+			"print('[f3liks hub] Player highlights applied.')"
+		}, "\n")
+	else
+		return table.concat({
+			"-- Built by f3liks hub AI Builder",
+			"-- Prompt: " .. tostring(rawPrompt),
+			"local Players = game:GetService('Players')",
+			"local lp = Players.LocalPlayer",
+			"local char = lp.Character or lp.CharacterAdded:Wait()",
+			"local hum = char:WaitForChild('Humanoid')",
+			"hum.UseJumpPower = true",
+			"hum.WalkSpeed = 32",
+			"hum.JumpPower = 75",
+			"print('[f3liks hub] Applied WalkSpeed=32 and JumpPower=75.')"
+		}, "\n")
+	end
+end
+
+generateBtn.MouseButton1Click:Connect(function()
+	if isThinking then return end
+	isThinking = true
+	thinkRunId += 1
+	local currentId = thinkRunId
+
+	local delaySec = tonumber(stepDelayInput.Text) or 1.0
+	delaySec = math.clamp(delaySec, 0.25, 4.0)
+	local promptText = promptBox.Text ~= "" and promptBox.Text or "Custom utility script"
+
+	local thoughts = {
+		"[Step 1/5] Reading prompt: '" .. promptText .. "'",
+		"[Step 2/5] Identifying target Roblox services (Players, RunService, Humanoid)...",
+		"[Step 3/5] Checking character respawn & nil safety guards so nothing crashes...",
+		"[Step 4/5] Designing clean toggle/parameter structure for mobile execution...",
+		"[Step 5/5] Formatting final Luau code and syncing to output box..."
+	}
+
+	thoughtHeader.Text = "AI Thinking Process (Thinking...)"
+	thoughtBox.Text = ""
+	genScriptBox.Text = "-- Thinking in progress... waiting for steps to finish."
+	generateBtn.Text = "Thinking..."
+
+	task.spawn(function()
+		local logLines = {}
+		for i, line in ipairs(thoughts) do
+			if thinkRunId ~= currentId then return end
+			table.insert(logLines, string.format("%.1fs  %s", (i - 1) * delaySec, line))
+			thoughtBox.Text = table.concat(logLines, "\n")
+			thoughtBox.CursorPosition = #thoughtBox.Text + 1
+			task.wait(delaySec)
+		end
+
+		if thinkRunId ~= currentId then return end
+		local builtCode = buildScriptFromPrompt(promptText)
+		table.insert(logLines, string.format("%.1fs  Done! Script generated.", #thoughts * delaySec))
+		thoughtBox.Text = table.concat(logLines, "\n")
+		thoughtHeader.Text = "AI Thinking Process (Completed)"
+		genScriptBox.Text = builtCode
+		setOutputCode(builtCode, "AI Builder wrote a new script to Tools tab.")
+		generateBtn.Text = "Think & Build"
+		isThinking = false
+	end)
+end)
+
+copyGeneratedBtn.MouseButton1Click:Connect(function()
+	safeClipboard(genScriptBox.Text)
+	copyGeneratedBtn.Text = "Copied!"
+	task.delay(1.2, function()
+		if copyGeneratedBtn then
+			copyGeneratedBtn.Text = "Copy Script"
+		end
+	end)
+end)
+
+-- =========================================================
+-- TAB 2: MOVEMENT
+-- =========================================================
+local movePage = createPage("Movement", 2)
+makeLabel(movePage, "Movement Controls", 15, true, THEME.TextMain, 1)
+
+local noclipEnabled = false
+local infJumpEnabled = false
+local clickTpEnabled = false
+
+-- WalkSpeed card
+local wsCard = makeCard(movePage, 56, 2)
+addPadding(wsCard, 8)
+local wsLabel = Instance.new("TextLabel")
+wsLabel.Size = UDim2.new(0.45, 0, 1, 0)
+wsLabel.BackgroundTransparency = 1
+wsLabel.Text = "WalkSpeed"
+wsLabel.TextSize = 13
+wsLabel.Font = Enum.Font.GothamBold
+wsLabel.TextColor3 = THEME.TextMain
+wsLabel.TextXAlignment = Enum.TextXAlignment.Left
+wsLabel.Parent = wsCard
+
+local wsInput = makeInput(wsCard, "16", "28", 64)
+wsInput.Position = UDim2.new(1, -214, 0.5, -15)
+
+local wsApply = makeButton(wsCard, "Set Speed", THEME.Accent, function()
+	local hum = getHumanoid()
+	local val = tonumber(wsInput.Text)
+	if hum and val then
+		hum.WalkSpeed = math.clamp(val, 0, 250)
+	end
+end)
+wsApply.Size = UDim2.new(0, 82, 0, 30)
+wsApply.Position = UDim2.new(1, -144, 0.5, -15)
+
+local wsReset = makeButton(wsCard, "Reset", THEME.BgCardAlt, function()
+	local hum = getHumanoid()
+	wsInput.Text = "16"
+	if hum then hum.WalkSpeed = 16 end
+end)
+wsReset.Size = UDim2.new(0, 54, 0, 30)
+wsReset.Position = UDim2.new(1, -56, 0.5, -15)
+
+-- JumpPower card
+local jpCard = makeCard(movePage, 56, 3)
+addPadding(jpCard, 8)
+local jpLabel = Instance.new("TextLabel")
+jpLabel.Size = UDim2.new(0.45, 0, 1, 0)
+jpLabel.BackgroundTransparency = 1
+jpLabel.Text = "JumpPower"
+jpLabel.TextSize = 13
+jpLabel.Font = Enum.Font.GothamBold
+jpLabel.TextColor3 = THEME.TextMain
+jpLabel.TextXAlignment = Enum.TextXAlignment.Left
+jpLabel.Parent = jpCard
+
+local jpInput = makeInput(jpCard, "50", "75", 64)
+jpInput.Position = UDim2.new(1, -214, 0.5, -15)
+
+local jpApply = makeButton(jpCard, "Set Jump", THEME.Accent, function()
+	local hum = getHumanoid()
+	local val = tonumber(jpInput.Text)
+	if hum and val then
+		hum.UseJumpPower = true
+		hum.JumpPower = math.clamp(val, 0, 300)
+	end
+end)
+jpApply.Size = UDim2.new(0, 82, 0, 30)
+jpApply.Position = UDim2.new(1, -144, 0.5, -15)
+
+local jpReset = makeButton(jpCard, "Reset", THEME.BgCardAlt, function()
+	local hum = getHumanoid()
+	jpInput.Text = "50"
+	if hum then
+		hum.UseJumpPower = true
+		hum.JumpPower = 50
+	end
+end)
+jpReset.Size = UDim2.new(0, 54, 0, 30)
+jpReset.Position = UDim2.new(1, -56, 0.5, -15)
+
+-- Noclip toggle
+local ncCard = makeCard(movePage, 52, 4)
+addPadding(ncCard, 8)
+local ncLbl = Instance.new("TextLabel")
+ncLbl.Size = UDim2.new(0.65, 0, 1, 0)
+ncLbl.BackgroundTransparency = 1
+ncLbl.Text = "Noclip (Walk through parts)"
+ncLbl.TextSize = 13
+ncLbl.Font = Enum.Font.GothamBold
+ncLbl.TextColor3 = THEME.TextMain
+ncLbl.TextXAlignment = Enum.TextXAlignment.Left
+ncLbl.Parent = ncCard
+
+local ncBtn
+ncBtn = makeButton(ncCard, "OFF", THEME.BgCardAlt, function()
+	noclipEnabled = not noclipEnabled
+	ncBtn.Text = noclipEnabled and "ON" or "OFF"
+	ncBtn.BackgroundColor3 = noclipEnabled and THEME.Success or THEME.BgCardAlt
+end)
+ncBtn.Size = UDim2.new(0, 76, 0, 30)
+ncBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+-- Infinite Jump toggle
+local ijCard = makeCard(movePage, 52, 5)
+addPadding(ijCard, 8)
+local ijLbl = Instance.new("TextLabel")
+ijLbl.Size = UDim2.new(0.65, 0, 1, 0)
+ijLbl.BackgroundTransparency = 1
+ijLbl.Text = "Infinite Jump"
+ijLbl.TextSize = 13
+ijLbl.Font = Enum.Font.GothamBold
+ijLbl.TextColor3 = THEME.TextMain
+ijLbl.TextXAlignment = Enum.TextXAlignment.Left
+ijLbl.Parent = ijCard
+
+local ijBtn
+ijBtn = makeButton(ijCard, "OFF", THEME.BgCardAlt, function()
+	infJumpEnabled = not infJumpEnabled
+	ijBtn.Text = infJumpEnabled and "ON" or "OFF"
+	ijBtn.BackgroundColor3 = infJumpEnabled and THEME.Success or THEME.BgCardAlt
+end)
+ijBtn.Size = UDim2.new(0, 76, 0, 30)
+ijBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+-- Click / Tap Teleport toggle
+local tpCard = makeCard(movePage, 52, 6)
+addPadding(tpCard, 8)
+local tpLbl = Instance.new("TextLabel")
+tpLbl.Size = UDim2.new(0.65, 0, 1, 0)
+tpLbl.BackgroundTransparency = 1
+tpLbl.Text = "Tap / Click Teleport"
+tpLbl.TextSize = 13
+tpLbl.Font = Enum.Font.GothamBold
+tpLbl.TextColor3 = THEME.TextMain
+tpLbl.TextXAlignment = Enum.TextXAlignment.Left
+tpLbl.Parent = tpCard
+
+local tpBtn
+tpBtn = makeButton(tpCard, "OFF", THEME.BgCardAlt, function()
+	clickTpEnabled = not clickTpEnabled
+	tpBtn.Text = clickTpEnabled and "ON" or "OFF"
+	tpBtn.BackgroundColor3 = clickTpEnabled and THEME.Success or THEME.BgCardAlt
+end)
+tpBtn.Size = UDim2.new(0, 76, 0, 30)
+tpBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+RunService.Stepped:Connect(function()
+	if noclipEnabled and LocalPlayer.Character then
+		for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+	end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+	if infJumpEnabled then
+		local hum = getHumanoid()
+		if hum then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or not clickTpEnabled then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local cam = workspace.CurrentCamera
+		local hrp = getRoot()
+		if cam and hrp then
+			local pos = input.Position
+			local ray = cam:ViewportPointToRay(pos.X, pos.Y)
+			local hit = workspace:Raycast(ray.Origin, ray.Direction * 500)
+			if hit then
+				hrp.CFrame = CFrame.new(hit.Position + Vector3.new(0, 3, 0))
+			end
+		end
+	end
+end)
+
+-- =========================================================
+-- TAB 3: VISUALS
+-- =========================================================
+local visPage = createPage("Visuals", 3)
+makeLabel(visPage, "Visuals & Camera", 15, true, THEME.TextMain, 1)
+
+local fullbrightOn = false
+local noFogOn = false
+local espOn = false
+local espFolder = Instance.new("Folder")
+espFolder.Name = "f3liks_hub_esp"
+espFolder.Parent = uiParent
+
+local function rebuildEsp()
+	espFolder:ClearAllChildren()
+	if not espOn then return end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and plr.Character then
+			local hl = Instance.new("Highlight")
+			hl.Name = plr.Name .. "_HL"
+			hl.FillColor = THEME.Accent
+			hl.OutlineColor = THEME.TextMain
+			hl.FillTransparency = 0.65
+			hl.OutlineTransparency = 0.1
+			hl.Adornee = plr.Character
+			hl.Parent = espFolder
+		end
+	end
+end
+
+local fbCard = makeCard(visPage, 52, 2)
+addPadding(fbCard, 8)
+local fbLbl = Instance.new("TextLabel")
+fbLbl.Size = UDim2.new(0.65, 0, 1, 0)
+fbLbl.BackgroundTransparency = 1
+fbLbl.Text = "Fullbright Lighting"
+fbLbl.TextSize = 13
+fbLbl.Font = Enum.Font.GothamBold
+fbLbl.TextColor3 = THEME.TextMain
+fbLbl.TextXAlignment = Enum.TextXAlignment.Left
+fbLbl.Parent = fbCard
+
+local fbBtn
+fbBtn = makeButton(fbCard, "OFF", THEME.BgCardAlt, function()
+	fullbrightOn = not fullbrightOn
+	fbBtn.Text = fullbrightOn and "ON" or "OFF"
+	fbBtn.BackgroundColor3 = fullbrightOn and THEME.Success or THEME.BgCardAlt
+	if fullbrightOn then
+		Lighting.Brightness = 2.5
+		Lighting.GlobalShadows = false
+		Lighting.ClockTime = 14
+	else
+		Lighting.Brightness = 1
+		Lighting.GlobalShadows = true
+	end
+end)
+fbBtn.Size = UDim2.new(0, 76, 0, 30)
+fbBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+local fogCard = makeCard(visPage, 52, 3)
+addPadding(fogCard, 8)
+local fogLbl = Instance.new("TextLabel")
+fogLbl.Size = UDim2.new(0.65, 0, 1, 0)
+fogLbl.BackgroundTransparency = 1
+fogLbl.Text = "Clear Fog / Atmosphere"
+fogLbl.TextSize = 13
+fogLbl.Font = Enum.Font.GothamBold
+fogLbl.TextColor3 = THEME.TextMain
+fogLbl.TextXAlignment = Enum.TextXAlignment.Left
+fogLbl.Parent = fogCard
+
+local fogBtn
+fogBtn = makeButton(fogCard, "OFF", THEME.BgCardAlt, function()
+	noFogOn = not noFogOn
+	fogBtn.Text = noFogOn and "ON" or "OFF"
+	fogBtn.BackgroundColor3 = noFogOn and THEME.Success or THEME.BgCardAlt
+	if noFogOn then
+		Lighting.FogEnd = 1e6
+		for _, child in ipairs(Lighting:GetChildren()) do
+			if child:IsA("Atmosphere") then
+				child.Density = 0
+			end
+		end
+	else
+		Lighting.FogEnd = 10000
+	end
+end)
+fogBtn.Size = UDim2.new(0, 76, 0, 30)
+fogBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+local espCard = makeCard(visPage, 52, 4)
+addPadding(espCard, 8)
+local espLbl = Instance.new("TextLabel")
+espLbl.Size = UDim2.new(0.65, 0, 1, 0)
+espLbl.BackgroundTransparency = 1
+espLbl.Text = "Player Highlights (ESP)"
+espLbl.TextSize = 13
+espLbl.Font = Enum.Font.GothamBold
+espLbl.TextColor3 = THEME.TextMain
+espLbl.TextXAlignment = Enum.TextXAlignment.Left
+espLbl.Parent = espCard
+
+local espBtn
+espBtn = makeButton(espCard, "OFF", THEME.BgCardAlt, function()
+	espOn = not espOn
+	espBtn.Text = espOn and "ON" or "OFF"
+	espBtn.BackgroundColor3 = espOn and THEME.Success or THEME.BgCardAlt
+	rebuildEsp()
+end)
+espBtn.Size = UDim2.new(0, 76, 0, 30)
+espBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function()
+		if espOn then task.wait(0.3); rebuildEsp() end
+	end)
+end)
+
+local fovCard = makeCard(visPage, 56, 5)
+addPadding(fovCard, 8)
+local fovLbl = Instance.new("TextLabel")
+fovLbl.Size = UDim2.new(0.4, 0, 1, 0)
+fovLbl.BackgroundTransparency = 1
+fovLbl.Text = "Camera FOV"
+fovLbl.TextSize = 13
+fovLbl.Font = Enum.Font.GothamBold
+fovLbl.TextColor3 = THEME.TextMain
+fovLbl.TextXAlignment = Enum.TextXAlignment.Left
+fovLbl.Parent = fovCard
+
+local fovInput = makeInput(fovCard, "70", "90", 60)
+fovInput.Position = UDim2.new(1, -206, 0.5, -15)
+
+local fovSet = makeButton(fovCard, "Apply", THEME.Accent, function()
+	local cam = workspace.CurrentCamera
+	local v = tonumber(fovInput.Text)
+	if cam and v then
+		cam.FieldOfView = math.clamp(v, 35, 120)
+	end
+end)
+fovSet.Size = UDim2.new(0, 76, 0, 30)
+fovSet.Position = UDim2.new(1, -140, 0.5, -15)
+
+local fovReset = makeButton(fovCard, "70", THEME.BgCardAlt, function()
+	local cam = workspace.CurrentCamera
+	fovInput.Text = "70"
+	if cam then cam.FieldOfView = 70 end
+end)
+fovReset.Size = UDim2.new(0, 56, 0, 30)
+fovReset.Position = UDim2.new(1, -56, 0.5, -15)
+
+-- =========================================================
+-- TAB 4: PLAYER & SERVER
+-- =========================================================
+local srvPage = createPage("Player & Server", 4)
+makeLabel(srvPage, "Player & Server Actions", 15, true, THEME.TextMain, 1)
+
+local infoCard = makeCard(srvPage, 92, 2)
+addPadding(infoCard, 8)
+local infoText = Instance.new("TextLabel")
+infoText.Size = UDim2.new(1, 0, 1, 0)
+infoText.BackgroundTransparency = 1
+infoText.TextWrapped = true
+infoText.TextXAlignment = Enum.TextXAlignment.Left
+infoText.TextYAlignment = Enum.TextYAlignment.Top
+infoText.Font = Enum.Font.Code
+infoText.TextSize = 11
+infoText.TextColor3 = THEME.TextSub
+infoText.Text = string.format(
+	"PlaceId: %s\nJobId: %s\nPlayers: %d/%d",
+	tostring(game.PlaceId),
+	tostring(game.JobId),
+	#Players:GetPlayers(),
+	Players.MaxPlayers
+)
+infoText.Parent = infoCard
+
+local antiAfkOn = false
+local afkCard = makeCard(srvPage, 52, 3)
+addPadding(afkCard, 8)
+local afkLbl = Instance.new("TextLabel")
+afkLbl.Size = UDim2.new(0.65, 0, 1, 0)
+afkLbl.BackgroundTransparency = 1
+afkLbl.Text = "Anti-AFK Protection"
+afkLbl.TextSize = 13
+afkLbl.Font = Enum.Font.GothamBold
+afkLbl.TextColor3 = THEME.TextMain
+afkLbl.TextXAlignment = Enum.TextXAlignment.Left
+afkLbl.Parent = afkCard
+
+local afkBtn
+afkBtn = makeButton(afkCard, "OFF", THEME.BgCardAlt, function()
+	antiAfkOn = not antiAfkOn
+	afkBtn.Text = antiAfkOn and "ON" or "OFF"
+	afkBtn.BackgroundColor3 = antiAfkOn and THEME.Success or THEME.BgCardAlt
+end)
+afkBtn.Size = UDim2.new(0, 76, 0, 30)
+afkBtn.Position = UDim2.new(1, -76, 0.5, -15)
+
+LocalPlayer.Idled:Connect(function()
+	if antiAfkOn then
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	end
+end)
+
+local actionCard = makeCard(srvPage, 52, 4)
+addPadding(actionCard, 8)
+
+local respawnBtn = makeButton(actionCard, "Respawn", THEME.BgCardAlt, function()
+	local hum = getHumanoid()
+	if hum then hum.Health = 0 end
+end)
+respawnBtn.Size = UDim2.new(0, 100, 0, 32)
+respawnBtn.Position = UDim2.new(0, 0, 0.5, -16)
+
+local copyJobBtn = makeButton(actionCard, "Copy JobId", THEME.BgCardAlt, function()
+	safeClipboard(tostring(game.JobId))
+	copyJobBtn.Text = "Copied!"
+	task.delay(1.2, function()
+		if copyJobBtn then copyJobBtn.Text = "Copy JobId" end
+	end)
+end)
+copyJobBtn.Size = UDim2.new(0, 108, 0, 32)
+copyJobBtn.Position = UDim2.new(0, 108, 0.5, -16)
+
+local rejoinBtn = makeButton(actionCard, "Rejoin Server", THEME.Accent, function()
+	pcall(function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+	end)
+end)
+rejoinBtn.Size = UDim2.new(0, 120, 0, 32)
+rejoinBtn.Position = UDim2.new(1, -120, 0.5, -16)
+
+-- =========================================================
+-- TAB 5: TOOLS & CONSOLE
+-- =========================================================
+local toolsPage = createPage("Tools & Console", 5)
+makeLabel(toolsPage, "Script Runner & Hub Tools", 15, true, THEME.TextMain, 1)
+
+local statusCard = makeCard(toolsPage, 40, 2)
+addPadding(statusCard, 8)
+sharedStatusLabel = Instance.new("TextLabel")
+sharedStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+sharedStatusLabel.BackgroundTransparency = 1
+sharedStatusLabel.Text = "Status: f3liks hub mounted cleanly."
+sharedStatusLabel.TextSize = 12
+sharedStatusLabel.Font = Enum.Font.GothamBold
+sharedStatusLabel.TextColor3 = THEME.Success
+sharedStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+sharedStatusLabel.Parent = statusCard
+
+local outCard = makeCard(toolsPage, 165, 3)
+addPadding(outCard, 8)
+sharedOutputBox = Instance.new("TextBox")
+sharedOutputBox.Size = UDim2.new(1, 0, 1, 0)
+sharedOutputBox.BackgroundColor3 = THEME.BgInput
+sharedOutputBox.BorderSizePixel = 0
+sharedOutputBox.MultiLine = true
+sharedOutputBox.ClearTextOnFocus = false
+sharedOutputBox.TextWrapped = false
+sharedOutputBox.TextXAlignment = Enum.TextXAlignment.Left
+sharedOutputBox.TextYAlignment = Enum.TextYAlignment.Top
+sharedOutputBox.Font = Enum.Font.Code
+sharedOutputBox.TextSize = 11
+sharedOutputBox.TextColor3 = THEME.TextMain
+sharedOutputBox.Text = "-- Paste or generate Luau code here, then tap Run Code\nprint('Hello from f3liks hub!')"
+sharedOutputBox.Parent = outCard
+addCorner(sharedOutputBox, 6)
+addStroke(sharedOutputBox, THEME.Stroke, 1)
+
+local toolBtnCard = makeCard(toolsPage, 48, 4)
+addPadding(toolBtnCard, 8)
+
+local runOutBtn = makeButton(toolBtnCard, "Run Code", THEME.Success, function()
+	local fn, err = loadstring(sharedOutputBox.Text)
+	if not fn then
+		sharedStatusLabel.TextColor3 = THEME.Danger
+		sharedStatusLabel.Text = "Syntax Error: " .. tostring(err)
+		return
+	end
+	local ok, runErr = pcall(fn)
+	if ok then
+		sharedStatusLabel.TextColor3 = THEME.Success
+		sharedStatusLabel.Text = "Executed successfully."
+	else
+		sharedStatusLabel.TextColor3 = THEME.Danger
+		sharedStatusLabel.Text = "Runtime Error: " .. tostring(runErr)
+	end
+end)
+runOutBtn.Size = UDim2.new(0, 95, 0, 30)
+runOutBtn.Position = UDim2.new(0, 0, 0.5, -15)
+
+local clearOutBtn = makeButton(toolBtnCard, "Clear Box", THEME.BgCardAlt, function()
+	sharedOutputBox.Text = ""
+	sharedStatusLabel.TextColor3 = THEME.TextSub
+	sharedStatusLabel.Text = "Cleared output box."
+end)
+clearOutBtn.Size = UDim2.new(0, 95, 0, 30)
+clearOutBtn.Position = UDim2.new(0, 102, 0.5, -15)
+
+local destroyHubBtn = makeButton(toolBtnCard, "Destroy GUI", THEME.Danger, function()
+	thinkRunId += 1
+	pcall(function() espFolder:Destroy() end)
+	pcall(function() screenGui:Destroy() end)
+end)
+destroyHubBtn.Size = UDim2.new(0, 105, 0, 30)
+destroyHubBtn.Position = UDim2.new(1, -105, 0.5, -15)
+
+closeBtn.MouseButton1Click:Connect(function()
+	thinkRunId += 1
+	pcall(function() espFolder:Destroy() end)
+	pcall(function() screenGui:Destroy() end)
+end)
+
+-- Default active tab
+pages["AI Builder"].Visible = true
+tabButtons["AI Builder"].BackgroundColor3 = THEME.AccentSoft
+tabButtons["AI Builder"].TextColor3 = THEME.TextMain
+
+print("[f3liks hub] Mounted successfully.")
